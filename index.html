@@ -1,1 +1,97 @@
 
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Theo dõi danh mục đầu tư</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        table { width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f4f4f4; }
+        .profit { color: green; font-weight: bold; }
+        .loss { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h2>Danh mục cổ phiếu</h2>
+    <button onclick="loadPrices()">Cập nhật giá</button>
+
+    <table id="portfolio">
+        <thead>
+            <tr>
+                <th>Mã</th>
+                <th>Giá Mua</th>
+                <th>Giá Hiện Tại</th>
+                <th>Chênh Lệch</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+
+    <script>
+        // 1. Cấu hình URL API PHP của bạn. 
+        // LƯU Ý: Nếu PHP chạy trên máy cá nhân (localhost), GitHub sẽ không gọi được trừ khi bạn dùng Ngrok để public IP, 
+        // hoặc bạn phải up file api.php lên một hosting có public domain thực sự.
+        const API_URL = "http://localhost/getvalue/api.php?code=";
+
+        // 2. Danh mục đầu tư của bạn
+        const myPortfolio = [
+            { code: 'KBC', buyPrice: 32.5 },
+            { code: 'VNM', buyPrice: 70.0 }
+        ];
+
+        async function loadPrices() {
+            const tbody = document.querySelector("#portfolio tbody");
+            tbody.innerHTML = ""; // Xóa bảng cũ
+
+            for (let item of myPortfolio) {
+                // Tạo dòng table trống
+                let tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${item.code}</td>
+                    <td>${item.buyPrice}</td>
+                    <td id="price-${item.code}">Đang tải...</td>
+                    <td id="diff-${item.code}">...</td>
+                `;
+                tbody.appendChild(tr);
+
+                try {
+                    // Gọi PHP API
+                    const response = await fetch(API_URL + item.code);
+                    const data = await response.json();
+
+                    if (data.status === 'success') {
+                        // Vietstock thường hiển thị giá kiểu "35.5" (tức 35,500đ). Ta chuyển chuỗi này thành số.
+                        let currentPrice = parseFloat(data.price.replace(/,/g, ''));
+                        let diff = currentPrice - item.buyPrice;
+                        
+                        // Làm tròn 2 chữ số thập phân
+                        diff = Math.round(diff * 100) / 100; 
+
+                        // Hiển thị giá hiện tại
+                        document.getElementById(`price-${item.code}`).innerText = currentPrice;
+                        
+                        // Xử lý CSS xanh/đỏ cho chênh lệch
+                        let diffCell = document.getElementById(`diff-${item.code}`);
+                        diffCell.innerText = diff > 0 ? "+" + diff : diff;
+                        diffCell.className = diff >= 0 ? "profit" : "loss";
+                        
+                    } else {
+                        document.getElementById(`price-${item.code}`).innerText = "Lỗi API";
+                    }
+                } catch (error) {
+                    console.error("Lỗi fetch:", error);
+                    document.getElementById(`price-${item.code}`).innerText = "Lỗi mạng";
+                }
+            }
+        }
+
+        // Tự động load giá khi vừa mở trang
+        window.onload = loadPrices;
+    </script>
+</body>
+</html>
