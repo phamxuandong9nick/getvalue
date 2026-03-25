@@ -1,97 +1,162 @@
-
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Theo dõi danh mục đầu tư</title>
+    <title>Theo Dõi Danh Mục Cổ Phiếu</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        table { width: 100%; max-width: 600px; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
+        .form-group { margin-bottom: 20px; padding: 15px; background: #f9f9f9; border-radius: 5px; border: 1px solid #ddd; }
+        input { padding: 8px; margin-right: 10px; width: 150px; }
+        button { padding: 8px 15px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        .btn-delete { background: #dc3545; padding: 5px 10px; font-size: 12px; }
+        .btn-delete:hover { background: #a71d2a; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
         th { background-color: #f4f4f4; }
         .profit { color: green; font-weight: bold; }
         .loss { color: red; font-weight: bold; }
+        .loading { color: gray; font-style: italic; }
     </style>
 </head>
 <body>
 
-    <h2>Danh mục cổ phiếu</h2>
-    <button onclick="loadPrices()">Cập nhật giá</button>
+    <h2>Quản Lý Danh Mục Cổ Phiếu</h2>
+
+    <div class="form-group">
+        <label><b>Thêm / Cập nhật mã:</b></label><br><br>
+        <input type="text" id="stockCode" placeholder="Nhập mã (VD: KBC)" style="text-transform: uppercase;">
+        <input type="number" id="buyPrice" placeholder="Giá mua (VD: 25000)">
+        <button onclick="addOrUpdateStock()">Lưu vào danh mục</button>
+    </div>
+
+    <button onclick="loadPrices()" style="background: #28a745;">Cập nhật giá thị trường</button>
 
     <table id="portfolio">
         <thead>
             <tr>
-                <th>Mã</th>
+                <th>Mã HSX</th>
                 <th>Giá Mua</th>
                 <th>Giá Hiện Tại</th>
                 <th>Chênh Lệch</th>
+                <th>Hành Động</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="portfolioBody">
             </tbody>
     </table>
 
     <script>
-        // 1. Cấu hình URL API PHP của bạn. 
-        // LƯU Ý: Nếu PHP chạy trên máy cá nhân (localhost), GitHub sẽ không gọi được trừ khi bạn dùng Ngrok để public IP, 
-        // hoặc bạn phải up file api.php lên một hosting có public domain thực sự.
+        // Trỏ đúng vào API bạn vừa deploy thành công
         const API_URL = "https://niks.page.gd/apis.php?code=";
 
-        // 2. Danh mục đầu tư của bạn
-        const myPortfolio = [
-            { code: 'KBC', buyPrice: 32.5 },
-            { code: 'VNM', buyPrice: 70.0 }
-        ];
+        // Khởi tạo danh mục từ LocalStorage (nếu chưa có thì mảng rỗng)
+        let myPortfolio = JSON.parse(localStorage.getItem('myStockPortfolio')) || [];
 
-        async function loadPrices() {
-            const tbody = document.querySelector("#portfolio tbody");
-            tbody.innerHTML = ""; // Xóa bảng cũ
+        // Hàm lưu vào LocalStorage
+        function saveToCache() {
+            localStorage.setItem('myStockPortfolio', JSON.stringify(myPortfolio));
+        }
 
-            for (let item of myPortfolio) {
-                // Tạo dòng table trống
+        // Hàm thêm hoặc cập nhật cổ phiếu
+        function addOrUpdateStock() {
+            let codeInput = document.getElementById("stockCode").value.trim().toUpperCase();
+            let priceInput = parseFloat(document.getElementById("buyPrice").value);
+
+            if (!codeInput || isNaN(priceInput)) {
+                alert("Vui lòng nhập mã cổ phiếu và giá mua hợp lệ!");
+                return;
+            }
+
+            // Kiểm tra xem mã đã có chưa, nếu có thì cập nhật giá, chưa có thì thêm mới
+            let existingIndex = myPortfolio.findIndex(item => item.code === codeInput);
+            if (existingIndex >= 0) {
+                myPortfolio[existingIndex].buyPrice = priceInput;
+            } else {
+                myPortfolio.push({ code: codeInput, buyPrice: priceInput });
+            }
+
+            saveToCache();
+            document.getElementById("stockCode").value = "";
+            document.getElementById("buyPrice").value = "";
+            renderTable();
+            loadPrices(); // Tải lại giá ngay lập tức
+        }
+
+        // Hàm xóa cổ phiếu
+        function deleteStock(code) {
+            myPortfolio = myPortfolio.filter(item => item.code !== code);
+            saveToCache();
+            renderTable();
+        }
+
+        // Hàm vẽ bảng dữ liệu ban đầu
+        function renderTable() {
+            const tbody = document.getElementById("portfolioBody");
+            tbody.innerHTML = ""; 
+
+            myPortfolio.forEach(item => {
                 let tr = document.createElement("tr");
                 tr.innerHTML = `
-                    <td>${item.code}</td>
-                    <td>${item.buyPrice}</td>
-                    <td id="price-${item.code}">Đang tải...</td>
-                    <td id="diff-${item.code}">...</td>
+                    <td><strong>${item.code}</strong></td>
+                    <td>${item.buyPrice.toLocaleString('vi-VN')}</td>
+                    <td id="price-${item.code}" class="loading">Đang chờ...</td>
+                    <td id="diff-${item.code}">-</td>
+                    <td><button class="btn-delete" onclick="deleteStock('${item.code}')">Xóa</button></td>
                 `;
                 tbody.appendChild(tr);
+            });
+        }
 
+        // Hàm gọi API lấy giá và tính toán
+        async function loadPrices() {
+            if (myPortfolio.length === 0) return;
+
+            // Chuyển text sang "Đang tải" để tạo hiệu ứng UX
+            myPortfolio.forEach(item => {
+                let priceCell = document.getElementById(`price-${item.code}`);
+                if(priceCell) priceCell.innerText = "Đang tải...";
+            });
+
+            for (let item of myPortfolio) {
                 try {
-                    // Gọi PHP API
                     const response = await fetch(API_URL + item.code);
                     const data = await response.json();
 
                     if (data.status === 'success') {
-                        // Vietstock thường hiển thị giá kiểu "35.5" (tức 35,500đ). Ta chuyển chuỗi này thành số.
-                        let currentPrice = parseFloat(data.price.replace(/,/g, ''));
+                        // Xử lý chuỗi "28,900" thành số 28900
+                        let rawPriceString = data.price.replace(/,/g, '');
+                        let currentPrice = parseFloat(rawPriceString);
+                        
+                        // Tính chênh lệch
                         let diff = currentPrice - item.buyPrice;
-                        
-                        // Làm tròn 2 chữ số thập phân
-                        diff = Math.round(diff * 100) / 100; 
 
-                        // Hiển thị giá hiện tại
-                        document.getElementById(`price-${item.code}`).innerText = currentPrice;
+                        // Hiển thị giá hiện tại có format (VD: 28,900)
+                        document.getElementById(`price-${item.code}`).innerText = currentPrice.toLocaleString('vi-VN');
+                        document.getElementById(`price-${item.code}`).classList.remove('loading');
                         
-                        // Xử lý CSS xanh/đỏ cho chênh lệch
+                        // Xử lý hiển thị chênh lệch
                         let diffCell = document.getElementById(`diff-${item.code}`);
-                        diffCell.innerText = diff > 0 ? "+" + diff : diff;
+                        let prefix = diff > 0 ? "+" : "";
+                        diffCell.innerText = prefix + diff.toLocaleString('vi-VN');
                         diffCell.className = diff >= 0 ? "profit" : "loss";
                         
                     } else {
-                        document.getElementById(`price-${item.code}`).innerText = "Lỗi API";
+                        document.getElementById(`price-${item.code}`).innerText = "Lỗi dữ liệu";
                     }
                 } catch (error) {
-                    console.error("Lỗi fetch:", error);
-                    document.getElementById(`price-${item.code}`).innerText = "Lỗi mạng";
+                    console.error("Lỗi fetch cho mã " + item.code + ":", error);
+                    document.getElementById(`price-${item.code}`).innerText = "Lỗi kết nối";
                 }
             }
         }
 
-        // Tự động load giá khi vừa mở trang
-        window.onload = loadPrices;
+        // Khi load trang thì vẽ bảng và tự động fetch giá
+        window.onload = function() {
+            renderTable();
+            loadPrices();
+        };
     </script>
 </body>
 </html>
